@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchContent, detectPlatform } from '@/lib/adapters';
-import { ingestArticle } from '@/lib/engine/ingest';
+import { adapterRegistry } from '@/modules/adapters';
+import { ingestPipeline } from '@/modules/engine';
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
@@ -10,23 +10,15 @@ export async function POST(request: NextRequest) {
   const urlMatch = url.match(/https?:\/\/[^\s]+/);
   const targetUrl = urlMatch ? urlMatch[0] : url;
 
-  if (!targetUrl || !detectPlatform(targetUrl)) {
+  if (!targetUrl || !adapterRegistry.detect(targetUrl)) {
     return NextResponse.redirect(
       new URL(`/?error=unsupported&url=${encodeURIComponent(url)}`, request.url)
     );
   }
 
   try {
-    const content = await fetchContent(targetUrl);
-    await ingestArticle({
-      sourcePlatform: content.sourcePlatform,
-      sourceUrl: content.sourceUrl,
-      title: content.title,
-      bodyMarkdown: content.bodyMarkdown,
-      author: content.author,
-      mediaUrls: content.mediaUrls,
-      confidence: content.confidence,
-    });
+    const content = await adapterRegistry.fetch(targetUrl);
+    await ingestPipeline.ingest(content);
 
     return NextResponse.redirect(
       new URL(`/?success=true&title=${encodeURIComponent(content.title)}`, request.url)

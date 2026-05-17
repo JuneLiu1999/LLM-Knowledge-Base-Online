@@ -1,4 +1,4 @@
-import { AdapterResult } from './index';
+import type { ContentAdapter, ContentResult } from './types';
 
 interface BiliVideoInfo {
   title: string;
@@ -71,20 +71,27 @@ async function getSubtitle(bvid: string, cid: number): Promise<string | null> {
   }
 }
 
-export async function fetchBilibili(url: string): Promise<AdapterResult> {
-  const resolvedUrl = await resolveShortUrl(url);
-  const bvid = extractBVID(resolvedUrl);
-  const info = await getVideoInfo(bvid);
+export class BilibiliAdapter implements ContentAdapter {
+  readonly platform = 'bilibili' as const;
 
-  let subtitle: string | null = null;
-  if (info.pages.length > 0) {
-    subtitle = await getSubtitle(bvid, info.pages[0].cid);
+  matches(url: string): boolean {
+    return url.includes('bilibili.com') || url.includes('b23.tv');
   }
 
-  const date = new Date(info.pubdate * 1000).toISOString().split('T')[0];
-  const stats = `播放 ${info.stat.view} | 点赞 ${info.stat.like} | 投币 ${info.stat.coin}`;
+  async fetch(url: string): Promise<ContentResult> {
+    const resolvedUrl = await resolveShortUrl(url);
+    const bvid = extractBVID(resolvedUrl);
+    const info = await getVideoInfo(bvid);
 
-  let bodyMarkdown = `---
+    let subtitle: string | null = null;
+    if (info.pages.length > 0) {
+      subtitle = await getSubtitle(bvid, info.pages[0].cid);
+    }
+
+    const date = new Date(info.pubdate * 1000).toISOString().split('T')[0];
+    const stats = `播放 ${info.stat.view} | 点赞 ${info.stat.like} | 投币 ${info.stat.coin}`;
+
+    let bodyMarkdown = `---
 source: bilibili
 url: ${resolvedUrl}
 author: ${info.owner.name}
@@ -104,17 +111,18 @@ tags: ${info.tname}
 ${info.desc || '无简介'}
 `;
 
-  if (subtitle) {
-    bodyMarkdown += `\n## 字幕内容\n\n${subtitle}\n`;
-  }
+    if (subtitle) {
+      bodyMarkdown += `\n## 字幕内容\n\n${subtitle}\n`;
+    }
 
-  return {
-    sourcePlatform: 'bilibili',
-    sourceUrl: resolvedUrl,
-    title: info.title,
-    bodyMarkdown,
-    author: info.owner.name,
-    mediaUrls: [{ type: 'image', url: info.pic }],
-    confidence: subtitle ? 'high' : 'medium',
-  };
+    return {
+      sourcePlatform: 'bilibili',
+      sourceUrl: resolvedUrl,
+      title: info.title,
+      bodyMarkdown,
+      author: info.owner.name,
+      mediaUrls: [{ type: 'image', url: info.pic }],
+      confidence: subtitle ? 'high' : 'medium',
+    };
+  }
 }

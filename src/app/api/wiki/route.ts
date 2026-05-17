@@ -1,54 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { storage } from '@/modules/storage';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const path = searchParams.get('path');
 
   if (path) {
-    const topic = await prisma.wikiTopic.findUnique({
-      where: { topicPath: path },
-      include: {
-        linksFrom: { include: { toTopic: { select: { topicPath: true } } } },
-        linksTo: { include: { fromTopic: { select: { topicPath: true } } } },
-        contradictions: true,
-        contributions: {
-          include: { rawCapture: { select: { title: true, sourceUrl: true, sourcePlatform: true } } },
-          orderBy: { contributedAt: 'desc' },
-        },
-      },
-    });
-
+    const topic = await storage.topic.findByPathWithRelations(path);
     if (!topic) {
       return NextResponse.json({ error: '主题不存在' }, { status: 404 });
     }
-
-    const links = [
-      ...topic.linksFrom.map(l => ({ path: l.toTopic.topicPath, reason: l.reason })),
-      ...topic.linksTo.map(l => ({ path: l.fromTopic.topicPath, reason: l.reason })),
-    ];
 
     return NextResponse.json({
       topicPath: topic.topicPath,
       contentMd: topic.contentMd,
       updatedAt: topic.updatedAt,
-      links,
+      links: topic.links,
       contradictions: topic.contradictions,
-      sources: topic.contributions.map(c => ({
-        title: c.rawCapture.title,
-        url: c.rawCapture.sourceUrl,
-        platform: c.rawCapture.sourcePlatform,
-      })),
+      sources: topic.sources,
     });
   }
 
-  const topics = await prisma.wikiTopic.findMany({
-    select: { topicPath: true, updatedAt: true },
-    orderBy: { updatedAt: 'desc' },
-  });
-
+  const topics = await storage.topic.listAll();
   const tree = buildTree(topics.map(t => t.topicPath));
-
   return NextResponse.json({ tree, topics });
 }
 
