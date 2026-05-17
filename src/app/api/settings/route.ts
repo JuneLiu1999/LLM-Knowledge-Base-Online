@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllSettings, setSetting } from '@/lib/settings';
-import { invalidateConfigCache } from '@/lib/llm';
+import { settingsService } from '@/modules/settings';
+import { llm } from '@/modules/llm';
 
 export async function GET() {
   try {
-    const settings = await getAllSettings();
+    const settings = await settingsService.getAll();
     return NextResponse.json({ settings });
   } catch (error) {
     const message = error instanceof Error ? error.message : '获取设置失败';
@@ -19,13 +19,12 @@ export async function PUT(request: NextRequest) {
     if (!key || typeof key !== 'string') {
       return NextResponse.json({ error: '无效的设置项' }, { status: 400 });
     }
-
     if (!value || typeof value !== 'string') {
       return NextResponse.json({ error: '无效的值' }, { status: 400 });
     }
 
-    await setSetting(key, value);
-    invalidateConfigCache();
+    await settingsService.set(key, value);
+    llm.invalidate();
 
     return NextResponse.json({ success: true });
   } catch (error) {
