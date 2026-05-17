@@ -1,0 +1,92 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+model RawCapture {
+  id             String         @id @default(cuid())
+  sourcePlatform String         @map("source_platform")
+  sourceUrl      String         @map("source_url")
+  title          String
+  bodyMarkdown   String         @map("body_markdown")
+  author         String?
+  mediaUrls      Json           @default("[]") @map("media_urls")
+  capturedAt     DateTime       @default(now()) @map("captured_at")
+  confidence     String         @default("high")
+  contributions  Contribution[]
+
+  @@map("raw_captures")
+}
+
+model WikiTopic {
+  id             String          @id @default(cuid())
+  topicPath      String          @unique @map("topic_path")
+  contentMd      String          @map("content_md")
+  embedding      Unsupported("vector(1536)")?
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  contributions  Contribution[]
+  linksFrom      TopicLink[]     @relation("from")
+  linksTo        TopicLink[]     @relation("to")
+  contradictions Contradiction[]
+
+  @@map("wiki_topics")
+}
+
+model Contribution {
+  id           String     @id @default(cuid())
+  rawCapture   RawCapture @relation(fields: [rawCaptureId], references: [id])
+  rawCaptureId String     @map("raw_capture_id")
+  wikiTopic    WikiTopic  @relation(fields: [wikiTopicId], references: [id])
+  wikiTopicId  String     @map("wiki_topic_id")
+  contributedAt DateTime  @default(now()) @map("contributed_at")
+
+  @@map("contributions")
+}
+
+model TopicLink {
+  id          String    @id @default(cuid())
+  fromTopic   WikiTopic @relation("from", fields: [fromTopicId], references: [id])
+  fromTopicId String    @map("from_topic_id")
+  toTopic     WikiTopic @relation("to", fields: [toTopicId], references: [id])
+  toTopicId   String    @map("to_topic_id")
+  reason      String
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@map("topic_links")
+}
+
+model Contradiction {
+  id           String    @id @default(cuid())
+  wikiTopic    WikiTopic @relation(fields: [wikiTopicId], references: [id])
+  wikiTopicId  String    @map("wiki_topic_id")
+  rawCaptureId String    @map("raw_capture_id")
+  note         String
+  resolved     Boolean   @default(false)
+
+  @@map("contradictions")
+}
+
+model DailyReport {
+  id        String   @id @default(cuid())
+  date      String   @unique
+  contentMd String   @map("content_md")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("daily_reports")
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   // AES encrypted for sensitive values
+  encrypted Boolean  @default(false)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
