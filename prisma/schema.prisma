@@ -9,84 +9,169 @@ datasource db {
   extensions = [vector]
 }
 
-model RawCapture {
-  id             String         @id @default(cuid())
-  sourcePlatform String         @map("source_platform")
-  sourceUrl      String         @map("source_url")
-  title          String
-  bodyMarkdown   String         @map("body_markdown")
-  author         String?
-  mediaUrls      Json           @default("[]") @map("media_urls")
-  capturedAt     DateTime       @default(now()) @map("captured_at")
-  confidence     String         @default("high")
-  contributions  Contribution[]
+// =============================================================
+// 账号体系（两套独立）
+// =============================================================
 
+model Admin {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  invitesCreated InviteCode[] @relation("CreatedByAdmin")
+
+  @@map("admins")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  passwordHash  String   @map("password_hash")
+  invitedByCode String?  @map("invited_by_code")
+  storageBytes  BigInt   @default(0) @map("storage_bytes")
+  tokensInput   BigInt   @default(0) @map("tokens_input")
+  tokensOutput  BigInt   @default(0) @map("tokens_output")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  rawCaptures  RawCapture[]
+  wikiTopics   WikiTopic[]
+  dailyReports DailyReport[]
+  settings     Setting[]
+  invitesUsed  InviteCode[]  @relation("UsedByUser")
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  actorType String   @map("actor_type") // 'user' | 'admin'
+  actorId   String   @map("actor_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+
+  @@index([actorType, actorId])
+  @@map("sessions")
+}
+
+model InviteCode {
+  code      String    @id
+  createdBy String    @map("created_by")
+  usedBy    String?   @map("used_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  usedAt    DateTime? @map("used_at")
+  expiresAt DateTime? @map("expires_at")
+
+  admin Admin @relation("CreatedByAdmin", fields: [createdBy], references: [id])
+  user  User? @relation("UsedByUser", fields: [usedBy], references: [id])
+
+  @@map("invite_codes")
+}
+
+// =============================================================
+// 业务数据（按 userId 隔离）
+// =============================================================
+
+model RawCapture {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  sourcePlatform String   @map("source_platform")
+  sourceUrl      String   @map("source_url")
+  title          String
+  bodyMarkdown   String   @map("body_markdown")
+  author         String?
+  mediaUrls      Json     @default("[]") @map("media_urls")
+  capturedAt     DateTime @default(now()) @map("captured_at")
+  confidence     String   @default("high")
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contributions Contribution[]
+
+  @@index([userId])
   @@map("raw_captures")
 }
 
 model WikiTopic {
-  id             String          @id @default(cuid())
-  topicPath      String          @unique @map("topic_path")
-  contentMd      String          @map("content_md")
-  embedding      Unsupported("vector(1536)")?
-  updatedAt      DateTime        @updatedAt @map("updated_at")
+  id        String                       @id @default(cuid())
+  userId    String                       @map("user_id")
+  topicPath String                       @map("topic_path")
+  contentMd String                       @map("content_md")
+  embedding Unsupported("vector(1536)")?
+  updatedAt DateTime                     @updatedAt @map("updated_at")
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   contributions  Contribution[]
   linksFrom      TopicLink[]     @relation("from")
   linksTo        TopicLink[]     @relation("to")
   contradictions Contradiction[]
 
+  @@unique([userId, topicPath])
+  @@index([userId])
   @@map("wiki_topics")
 }
 
 model Contribution {
-  id           String     @id @default(cuid())
-  rawCapture   RawCapture @relation(fields: [rawCaptureId], references: [id])
-  rawCaptureId String     @map("raw_capture_id")
-  wikiTopic    WikiTopic  @relation(fields: [wikiTopicId], references: [id])
-  wikiTopicId  String     @map("wiki_topic_id")
-  contributedAt DateTime  @default(now()) @map("contributed_at")
+  id            String   @id @default(cuid())
+  rawCaptureId  String   @map("raw_capture_id")
+  wikiTopicId   String   @map("wiki_topic_id")
+  contributedAt DateTime @default(now()) @map("contributed_at")
 
+  rawCapture RawCapture @relation(fields: [rawCaptureId], references: [id], onDelete: Cascade)
+  wikiTopic  WikiTopic  @relation(fields: [wikiTopicId], references: [id], onDelete: Cascade)
+
+  @@index([wikiTopicId])
   @@map("contributions")
 }
 
 model TopicLink {
-  id          String    @id @default(cuid())
-  fromTopic   WikiTopic @relation("from", fields: [fromTopicId], references: [id])
-  fromTopicId String    @map("from_topic_id")
-  toTopic     WikiTopic @relation("to", fields: [toTopicId], references: [id])
-  toTopicId   String    @map("to_topic_id")
+  id          String   @id @default(cuid())
+  fromTopicId String   @map("from_topic_id")
+  toTopicId   String   @map("to_topic_id")
   reason      String
-  createdAt   DateTime  @default(now()) @map("created_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  fromTopic WikiTopic @relation("from", fields: [fromTopicId], references: [id], onDelete: Cascade)
+  toTopic   WikiTopic @relation("to", fields: [toTopicId], references: [id], onDelete: Cascade)
 
   @@map("topic_links")
 }
 
 model Contradiction {
-  id           String    @id @default(cuid())
-  wikiTopic    WikiTopic @relation(fields: [wikiTopicId], references: [id])
-  wikiTopicId  String    @map("wiki_topic_id")
-  rawCaptureId String    @map("raw_capture_id")
+  id           String  @id @default(cuid())
+  wikiTopicId  String  @map("wiki_topic_id")
+  rawCaptureId String  @map("raw_capture_id")
   note         String
-  resolved     Boolean   @default(false)
+  resolved     Boolean @default(false)
+
+  wikiTopic WikiTopic @relation(fields: [wikiTopicId], references: [id], onDelete: Cascade)
 
   @@map("contradictions")
 }
 
 model DailyReport {
   id        String   @id @default(cuid())
-  date      String   @unique
+  userId    String   @map("user_id")
+  date      String
   contentMd String   @map("content_md")
   createdAt DateTime @default(now()) @map("created_at")
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
   @@map("daily_reports")
 }
 
 model Setting {
   id        String   @id @default(cuid())
-  key       String   @unique
-  value     String   // AES encrypted for sensitive values
+  userId    String   @map("user_id")
+  key       String
+  value     String // AES-256-GCM encrypted for sensitive values
   encrypted Boolean  @default(false)
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
   @@map("settings")
 }

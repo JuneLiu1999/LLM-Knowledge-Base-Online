@@ -30,11 +30,11 @@ export interface IngestResult {
 }
 
 export interface IngestPipeline {
-  ingest(input: IngestInput): Promise<IngestResult>;
+  ingest(userId: string, input: IngestInput): Promise<IngestResult>;
 }
 
 export interface Reporter {
-  generateDailyReport(date?: string): Promise<string>;
+  generateDailyReport(userId: string, date?: string): Promise<string>;
 }
 
 export interface SchemaLoader {

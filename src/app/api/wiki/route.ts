@@ -1,29 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { storage } from '@/modules/storage';
+import { requireUser, UnauthorizedError } from '@/modules/auth-user/request';
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const path = searchParams.get('path');
+  try {
+    const user = await requireUser(request);
+    const { searchParams } = new URL(request.url);
+    const path = searchParams.get('path');
 
-  if (path) {
-    const topic = await storage.topic.findByPathWithRelations(path);
-    if (!topic) {
-      return NextResponse.json({ error: '主题不存在' }, { status: 404 });
+    if (path) {
+      const topic = await storage.topic.findByPathWithRelations(user.id, path);
+      if (!topic) {
+        return NextResponse.json({ error: '主题不存在' }, { status: 404 });
+      }
+
+      return NextResponse.json({
+        topicPath: topic.topicPath,
+        contentMd: topic.contentMd,
+        updatedAt: topic.updatedAt,
+        links: topic.links,
+        contradictions: topic.contradictions,
+        sources: topic.sources,
+      });
     }
 
-    return NextResponse.json({
-      topicPath: topic.topicPath,
-      contentMd: topic.contentMd,
-      updatedAt: topic.updatedAt,
-      links: topic.links,
-      contradictions: topic.contradictions,
-      sources: topic.sources,
-    });
+    const topics = await storage.topic.listAll(user.id);
+    const tree = buildTree(topics.map(t => t.topicPath));
+    return NextResponse.json({ tree, topics });
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    const message = error instanceof Error ? error.message : '未知错误';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const topics = await storage.topic.listAll();
-  const tree = buildTree(topics.map(t => t.topicPath));
-  return NextResponse.json({ tree, topics });
 }
 
 interface TreeNode {

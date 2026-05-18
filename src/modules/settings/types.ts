@@ -11,9 +11,9 @@ export interface LLMConfig {
 }
 
 export interface SettingsService {
-  get(key: string): Promise<string | null>;
-  set(key: string, value: string): Promise<void>;
-  getMasked(key: string): Promise<string | null>;
-  getAll(): Promise<Record<string, string | null>>;
-  getLLMConfig(): Promise<LLMConfig>;
+  get(userId: string, key: string): Promise<string | null>;
+  set(userId: string, key: string, value: string): Promise<void>;
+  getMasked(userId: string, key: string): Promise<string | null>;
+  getAll(userId: string): Promise<Record<string, string | null>>;
+  getLLMConfig(userId: string): Promise<LLMConfig>;
 }

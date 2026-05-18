@@ -8,37 +8,27 @@ export { OpenAIChatClient, OpenAIEmbeddingClient } from './openai';
 
 const CONFIG_TTL = 60_000;
 
-function envFallback(): LLMConfig {
-  return {
-    cheapModelBaseUrl: process.env.CHEAP_MODEL_BASE_URL || '',
-    cheapModelApiKey: process.env.CHEAP_MODEL_API_KEY || '',
-    cheapModelName: process.env.CHEAP_MODEL_NAME || 'deepseek-chat',
-    strongModelBaseUrl: process.env.STRONG_MODEL_BASE_URL || '',
-    strongModelApiKey: process.env.STRONG_MODEL_API_KEY || '',
-    strongModelName: process.env.STRONG_MODEL_NAME || 'deepseek-chat',
-    embeddingModelBaseUrl: process.env.EMBEDDING_MODEL_BASE_URL || '',
-    embeddingModelApiKey: process.env.EMBEDDING_MODEL_API_KEY || '',
-    embeddingModelName: process.env.EMBEDDING_MODEL_NAME || 'deepseek-embedding',
-  };
+interface CacheEntry {
+  config: LLMConfig;
+  loadedAt: number;
+}
+
+const configCache = new Map<string, CacheEntry>();
+
+export function invalidateLLMCache(userId: string): void {
+  configCache.delete(userId);
 }
 
 export class SettingsBackedLLMProvider implements LLMProvider {
-  private config: LLMConfig | null = null;
-  private loadedAt = 0;
-
-  constructor(private settings: SettingsService) {}
+  constructor(private settings: SettingsService, private userId: string) {}
 
   private async resolveConfig(): Promise<LLMConfig> {
     const now = Date.now();
-    if (!this.config || now - this.loadedAt > CONFIG_TTL) {
-      try {
-        this.config = await this.settings.getLLMConfig();
-      } catch {
-        this.config = envFallback();
-      }
-      this.loadedAt = now;
-    }
-    return this.config;
+    const entry = configCache.get(this.userId);
+    if (entry && now - entry.loadedAt < CONFIG_TTL) return entry.config;
+    const config = await this.settings.getLLMConfig(this.userId);
+    configCache.set(this.userId, { config, loadedAt: now });
+    return config;
   }
 
   get cheap(): ChatClient {
@@ -84,9 +74,10 @@ export class SettingsBackedLLMProvider implements LLMProvider {
   }
 
   invalidate(): void {
-    this.config = null;
-    this.loadedAt = 0;
+    configCache.delete(this.userId);
   }
 }
 
-export const llm: LLMProvider = new SettingsBackedLLMProvider(settingsService);
+export function getLLMProvider(userId: string): LLMProvider {
+  return new SettingsBackedLLMProvider(settingsService, userId);
+}

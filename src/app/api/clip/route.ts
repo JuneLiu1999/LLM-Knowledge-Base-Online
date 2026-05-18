@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adapterRegistry } from '@/modules/adapters';
 import { ingestPipeline } from '@/modules/engine';
+import { requireUser, UnauthorizedError } from '@/modules/auth-user/request';
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireUser(request);
     const { url } = await request.json();
 
     if (!url || typeof url !== 'string') {
@@ -18,7 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     const content = await adapterRegistry.fetch(url);
-    const result = await ingestPipeline.ingest(content);
+    const result = await ingestPipeline.ingest(user.id, content);
 
     return NextResponse.json({
       success: true,
@@ -32,6 +34,9 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
     const message = error instanceof Error ? error.message : '未知错误';
     return NextResponse.json({ error: message }, { status: 500 });
   }

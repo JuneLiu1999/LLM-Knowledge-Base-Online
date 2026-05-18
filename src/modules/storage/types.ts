@@ -56,17 +56,23 @@ export interface ContributionWithRelations {
   };
 }
 
+export interface UserUsage {
+  storageBytes: number;
+  tokensInput: number;
+  tokensOutput: number;
+}
+
 export interface RawCaptureRepository {
-  create(input: RawCaptureInput): Promise<RawCaptureRecord>;
+  create(userId: string, input: RawCaptureInput): Promise<RawCaptureRecord>;
 }
 
 export interface TopicRepository {
-  findByPath(path: string): Promise<TopicRecord | null>;
-  findByPathWithRelations(path: string): Promise<TopicWithRelations | null>;
-  listAll(): Promise<Array<{ topicPath: string; updatedAt: Date }>>;
-  create(input: { topicPath: string; contentMd: string }): Promise<TopicRecord>;
+  findByPath(userId: string, path: string): Promise<TopicRecord | null>;
+  findByPathWithRelations(userId: string, path: string): Promise<TopicWithRelations | null>;
+  listAll(userId: string): Promise<Array<{ topicPath: string; updatedAt: Date }>>;
+  create(userId: string, input: { topicPath: string; contentMd: string }): Promise<TopicRecord>;
   update(id: string, contentMd: string): Promise<TopicRecord>;
-  findSimilar(embedding: number[], limit?: number): Promise<SimilarTopic[]>;
+  findSimilar(userId: string, embedding: number[], limit?: number): Promise<SimilarTopic[]>;
   updateEmbedding(id: string, embedding: number[]): Promise<void>;
 }
 
@@ -80,13 +86,18 @@ export interface ContradictionRepository {
 
 export interface ContributionRepository {
   create(rawCaptureId: string, wikiTopicId: string): Promise<void>;
-  findByDateRange(start: Date, end: Date): Promise<ContributionWithRelations[]>;
+  findByDateRange(userId: string, start: Date, end: Date): Promise<ContributionWithRelations[]>;
 }
 
 export interface DailyReportRepository {
-  findByDate(date: string): Promise<DailyReportRecord | null>;
-  listRecent(limit?: number): Promise<Array<{ id: string; date: string; createdAt: Date }>>;
-  upsert(date: string, contentMd: string): Promise<DailyReportRecord>;
+  findByDate(userId: string, date: string): Promise<DailyReportRecord | null>;
+  listRecent(userId: string, limit?: number): Promise<Array<{ id: string; date: string; createdAt: Date }>>;
+  upsert(userId: string, date: string, contentMd: string): Promise<DailyReportRecord>;
+}
+
+export interface UserUsageRepository {
+  addUsage(userId: string, delta: Partial<UserUsage>): Promise<void>;
+  getUsage(userId: string): Promise<UserUsage>;
 }
 
 export interface Storage {
@@ -96,4 +107,5 @@ export interface Storage {
   contradiction: ContradictionRepository;
   contribution: ContributionRepository;
   report: DailyReportRepository;
+  usage: UserUsageRepository;
 }
