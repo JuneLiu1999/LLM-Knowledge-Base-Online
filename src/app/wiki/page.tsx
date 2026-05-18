@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { DemoBanner } from '@/app/_components/DemoBanner';
 
 interface TopicInfo {
   topicPath: string;
@@ -18,13 +19,17 @@ export default function WikiIndexPage() {
   const [tree, setTree] = useState<TopicNode[]>([]);
   const [topics, setTopics] = useState<TopicInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isDemo, setIsDemo] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => setLoggedIn(!!d.user));
     fetch('/api/wiki')
       .then(r => r.json())
       .then(data => {
         setTree(data.tree || []);
         setTopics(data.topics || []);
+        setIsDemo(!!data.isDemo);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -33,7 +38,8 @@ export default function WikiIndexPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold">知识库</h1>
+      {isDemo && !loggedIn && <DemoBanner />}
+      <h1 className="text-xl font-bold">{isDemo && !loggedIn ? '演示账号知识库' : '知识库'}</h1>
 
       {tree.length === 0 ? (
         <div className="text-center py-12 text-gray-400">

@@ -12,11 +12,13 @@ export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [username, setUsername] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then((d: MeResponse) => {
       setUsername(d.user?.username ?? null);
-    }).catch(() => {});
+      setLoaded(true);
+    }).catch(() => setLoaded(true));
   }, [pathname]);
 
   if (
@@ -41,12 +43,20 @@ export function TopNav() {
           <Link href="/" className="text-gray-600 hover:text-blue-600">首页</Link>
           <Link href="/wiki" className="text-gray-600 hover:text-blue-600">知识库</Link>
           <Link href="/reports" className="text-gray-600 hover:text-blue-600">日报</Link>
-          <Link href="/settings" className="text-gray-600 hover:text-blue-600">设置</Link>
           {username && (
+            <Link href="/settings" className="text-gray-600 hover:text-blue-600">设置</Link>
+          )}
+          {!loaded ? null : username ? (
             <>
               <span className="text-gray-400">|</span>
               <span className="text-gray-500">{username}</span>
               <button onClick={logout} className="text-gray-500 hover:text-red-600">退出</button>
+            </>
+          ) : (
+            <>
+              <span className="text-gray-400">|</span>
+              <Link href="/login" className="text-blue-600 hover:underline">登录</Link>
+              <Link href="/register" className="text-gray-600 hover:text-blue-600">注册</Link>
             </>
           )}
         </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { DemoBanner } from '@/app/_components/DemoBanner';
 
 interface ReportListItem {
   id: string;
@@ -15,8 +16,11 @@ export default function ReportsPage() {
   const [selectedReport, setSelectedReport] = useState<{ date: string; contentMd: string } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isDemo, setIsDemo] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => setLoggedIn(!!d.user));
     loadReports();
   }, []);
 
@@ -25,6 +29,7 @@ export default function ReportsPage() {
       const resp = await fetch('/api/report');
       const data = await resp.json();
       setReports(data.reports || []);
+      setIsDemo(!!data.isDemo);
     } catch {} finally {
       setLoading(false);
     }
@@ -58,15 +63,18 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
+      {isDemo && !loggedIn && <DemoBanner />}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">日报</h1>
-        <button
-          onClick={generateToday}
-          disabled={generating}
-          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
-        >
-          {generating ? '生成中...' : '生成今日日报'}
-        </button>
+        <h1 className="text-xl font-bold">{isDemo && !loggedIn ? '演示账号日报' : '日报'}</h1>
+        {loggedIn && (
+          <button
+            onClick={generateToday}
+            disabled={generating}
+            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          >
+            {generating ? '生成中...' : '生成今日日报'}
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6">
@@ -105,7 +113,7 @@ export default function ReportsPage() {
             </article>
           ) : (
             <div className="text-gray-400 text-center py-12">
-              选择一份日报查看，或生成今日日报
+              {loggedIn ? '选择一份日报查看，或生成今日日报' : '选择一份日报查看'}
             </div>
           )}
         </div>

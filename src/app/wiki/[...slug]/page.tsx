@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { DemoBanner } from '@/app/_components/DemoBanner';
 
 interface TopicData {
   topicPath: string;
   contentMd: string;
   updatedAt: string;
+  isDemo?: boolean;
   links: Array<{ path: string; reason: string }>;
   contradictions: Array<{ note: string; resolved: boolean }>;
   sources: Array<{ title: string; url: string; platform: string }>;
@@ -20,8 +22,10 @@ export default function WikiPage() {
   const [topic, setTopic] = useState<TopicData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => setLoggedIn(!!d.user));
     if (!slug) return;
     fetch(`/api/wiki?path=${encodeURIComponent(slug)}`)
       .then(r => r.json())
@@ -39,6 +43,7 @@ export default function WikiPage() {
 
   return (
     <div className="space-y-6">
+      {topic.isDemo && !loggedIn && <DemoBanner />}
       {/* Breadcrumb */}
       <nav className="text-sm text-gray-500">
         <a href="/" className="hover:text-blue-600">首页</a>

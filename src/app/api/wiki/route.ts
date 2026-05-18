@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { storage } from '@/modules/storage';
-import { requireUser, UnauthorizedError } from '@/modules/auth-user/request';
+import { getEffectiveUserId, UnauthorizedError } from '@/modules/auth-user/request';
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await requireUser(request);
+    const { userId, isDemo } = await getEffectiveUserId(request);
     const { searchParams } = new URL(request.url);
     const path = searchParams.get('path');
 
     if (path) {
-      const topic = await storage.topic.findByPathWithRelations(user.id, path);
+      const topic = await storage.topic.findByPathWithRelations(userId, path);
       if (!topic) {
         return NextResponse.json({ error: '主题不存在' }, { status: 404 });
       }
@@ -21,12 +21,13 @@ export async function GET(request: NextRequest) {
         links: topic.links,
         contradictions: topic.contradictions,
         sources: topic.sources,
+        isDemo,
       });
     }
 
-    const topics = await storage.topic.listAll(user.id);
+    const topics = await storage.topic.listAll(userId);
     const tree = buildTree(topics.map(t => t.topicPath));
-    return NextResponse.json({ tree, topics });
+    return NextResponse.json({ tree, topics, isDemo });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
