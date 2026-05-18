@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const USER_COOKIE = 'kclip_user_session';
 const ADMIN_COOKIE = 'kclip_admin_session';
 
 const PUBLIC_PATHS = [
@@ -16,7 +15,19 @@ const PUBLIC_API_PATHS = [
   '/api/auth/register',
   '/api/auth/me',
   '/api/admin/auth/login',
-  '/api/share-target', // PWA Share Target falls through to /login if not authed
+];
+
+// Read-only routes that anonymous visitors can access (showing demo account data).
+// Write-only routes (/api/clip, /api/settings, /api/share-target) stay protected below.
+const DEMO_PUBLIC_PATHS = [
+  '/',
+  '/wiki',
+  '/reports',
+];
+
+const DEMO_PUBLIC_API_PATHS = [
+  '/api/wiki',
+  '/api/report',
 ];
 
 function isPublic(pathname: string): boolean {
@@ -26,10 +37,18 @@ function isPublic(pathname: string): boolean {
   return false;
 }
 
+function isDemoPublic(pathname: string): boolean {
+  if (DEMO_PUBLIC_PATHS.includes(pathname)) return true;
+  if (pathname.startsWith('/wiki/')) return true;
+  if (DEMO_PUBLIC_API_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return true;
+  return false;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isPublic(pathname)) return NextResponse.next();
+  if (isDemoPublic(pathname)) return NextResponse.next();
 
   const isAdminRoute =
     pathname === '/admin' ||
@@ -44,32 +63,23 @@ export function middleware(request: NextRequest) {
       }
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
-    const res = NextResponse.next();
-    res.headers.set('x-admin-session', adminSession);
-    return res;
+    return NextResponse.next();
   }
 
-  // Regular user route
-  const userSession = request.cookies.get(USER_COOKIE)?.value;
+  // Write-only routes that require user login: /api/clip, /api/settings,
+  // /api/share-target, /settings, /api/auth/logout
+  const userSession = request.cookies.get('kclip_user_session')?.value;
   if (!userSession) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: '未登录' }, { status: 401 });
     }
     return NextResponse.redirect(new URL('/login', request.url));
   }
-  const res = NextResponse.next();
-  res.headers.set('x-user-session', userSession);
-  return res;
+  return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization)
-     * - favicon.ico
-     */
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };
