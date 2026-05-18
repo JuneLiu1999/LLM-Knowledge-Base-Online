@@ -24,7 +24,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const content = await adapterRegistry.fetch(targetUrl);
-    await ingestPipeline.ingest(user.id, content);
+    const result = await ingestPipeline.saveRaw(user.id, content);
+    void ingestPipeline.classifyOne(user.id, result.rawCaptureId).catch(err => {
+      console.error('[BG classify failed]', err);
+    });
 
     return NextResponse.redirect(
       new URL(`/?success=true&title=${encodeURIComponent(content.title)}`, request.url)

@@ -73,21 +73,25 @@ model InviteCode {
 // =============================================================
 
 model RawCapture {
-  id             String   @id @default(cuid())
-  userId         String   @map("user_id")
-  sourcePlatform String   @map("source_platform")
-  sourceUrl      String   @map("source_url")
-  title          String
-  bodyMarkdown   String   @map("body_markdown")
-  author         String?
-  mediaUrls      Json     @default("[]") @map("media_urls")
-  capturedAt     DateTime @default(now()) @map("captured_at")
-  confidence     String   @default("high")
+  id                  String    @id @default(cuid())
+  userId              String    @map("user_id")
+  sourcePlatform      String    @map("source_platform")
+  sourceUrl           String    @map("source_url")
+  title               String
+  bodyMarkdown        String    @map("body_markdown")
+  author              String?
+  mediaUrls           Json      @default("[]") @map("media_urls")
+  capturedAt          DateTime  @default(now()) @map("captured_at")
+  confidence          String    @default("high")
+  status              String    @default("classified") // 'unclassified' | 'classifying' | 'classified' | 'failed'
+  classifiedAt        DateTime? @map("classified_at")
+  classificationError String?   @map("classification_error")
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   contributions Contribution[]
 
   @@index([userId])
+  @@index([userId, status])
   @@map("raw_captures")
 }
 

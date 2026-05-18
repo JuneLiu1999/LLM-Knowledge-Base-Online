@@ -3,6 +3,8 @@ import type {
   RawCaptureInput,
   RawCaptureRecord,
   RawCaptureRepository,
+  RawCaptureStatus,
+  RawCaptureSummary,
   TopicRecord,
   TopicRepository,
   TopicWithRelations,
@@ -18,6 +20,38 @@ import type {
   UserUsageRepository,
 } from './types';
 
+type RawRow = {
+  id: string;
+  sourcePlatform: string;
+  sourceUrl: string;
+  title: string;
+  bodyMarkdown: string;
+  author: string | null;
+  mediaUrls: unknown;
+  confidence: string;
+  capturedAt: Date;
+  status: string;
+  classifiedAt: Date | null;
+  classificationError: string | null;
+};
+
+function toRecord(row: RawRow): RawCaptureRecord {
+  return {
+    id: row.id,
+    sourcePlatform: row.sourcePlatform,
+    sourceUrl: row.sourceUrl,
+    title: row.title,
+    bodyMarkdown: row.bodyMarkdown,
+    author: row.author,
+    mediaUrls: row.mediaUrls as MediaUrl[],
+    confidence: row.confidence,
+    capturedAt: row.capturedAt,
+    status: row.status as RawCaptureStatus,
+    classifiedAt: row.classifiedAt,
+    classificationError: row.classificationError,
+  };
+}
+
 export class PrismaRawCaptureRepository implements RawCaptureRepository {
   constructor(private prisma: PrismaClient) {}
 
@@ -32,19 +66,65 @@ export class PrismaRawCaptureRepository implements RawCaptureRepository {
         author: input.author,
         mediaUrls: input.mediaUrls as unknown as object,
         confidence: input.confidence,
+        status: 'unclassified',
       },
     });
-    return {
-      id: row.id,
-      sourcePlatform: row.sourcePlatform,
-      sourceUrl: row.sourceUrl,
-      title: row.title,
-      bodyMarkdown: row.bodyMarkdown,
-      author: row.author,
-      mediaUrls: row.mediaUrls as unknown as MediaUrl[],
-      confidence: row.confidence,
-      capturedAt: row.capturedAt,
-    };
+    return toRecord(row);
+  }
+
+  async findById(userId: string, id: string): Promise<RawCaptureRecord | null> {
+    const row = await this.prisma.rawCapture.findFirst({ where: { id, userId } });
+    return row ? toRecord(row) : null;
+  }
+
+  async list(userId: string, opts: { status?: RawCaptureStatus; limit?: number } = {}): Promise<RawCaptureSummary[]> {
+    const rows = await this.prisma.rawCapture.findMany({
+      where: { userId, ...(opts.status ? { status: opts.status } : {}) },
+      orderBy: { capturedAt: 'desc' },
+      take: opts.limit ?? 100,
+      select: {
+        id: true,
+        title: true,
+        sourcePlatform: true,
+        sourceUrl: true,
+        capturedAt: true,
+        status: true,
+        classifiedAt: true,
+        classificationError: true,
+        contributions: {
+          take: 1,
+          orderBy: { contributedAt: 'desc' },
+          include: { wikiTopic: { select: { topicPath: true } } },
+        },
+      },
+    });
+
+    return rows.map(r => ({
+      id: r.id,
+      title: r.title,
+      sourcePlatform: r.sourcePlatform,
+      sourceUrl: r.sourceUrl,
+      capturedAt: r.capturedAt,
+      status: r.status as RawCaptureStatus,
+      classifiedAt: r.classifiedAt,
+      classificationError: r.classificationError,
+      topicPath: r.contributions[0]?.wikiTopic?.topicPath ?? null,
+    }));
+  }
+
+  async updateStatus(
+    id: string,
+    status: RawCaptureStatus,
+    fields: { classificationError?: string | null; classifiedAt?: Date | null } = {},
+  ): Promise<void> {
+    const data: { status: RawCaptureStatus; classificationError?: string | null; classifiedAt?: Date | null } = { status };
+    if ('classificationError' in fields) data.classificationError = fields.classificationError;
+    if ('classifiedAt' in fields) data.classifiedAt = fields.classifiedAt;
+    await this.prisma.rawCapture.update({ where: { id }, data });
+  }
+
+  async delete(userId: string, id: string): Promise<void> {
+    await this.prisma.rawCapture.deleteMany({ where: { id, userId } });
   }
 }
 

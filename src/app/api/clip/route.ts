@@ -20,17 +20,21 @@ export async function POST(request: NextRequest) {
     }
 
     const content = await adapterRegistry.fetch(url);
-    const result = await ingestPipeline.ingest(user.id, content);
+    const result = await ingestPipeline.saveRaw(user.id, content);
+
+    // Fire-and-forget background classification.
+    // Errors are recorded in the raw_capture.status='failed' + classificationError.
+    void ingestPipeline.classifyOne(user.id, result.rawCaptureId).catch(err => {
+      console.error('[BG classify failed]', result.rawCaptureId, err);
+    });
 
     return NextResponse.json({
       success: true,
       data: {
+        rawCaptureId: result.rawCaptureId,
         title: content.title,
         platform: content.sourcePlatform,
-        topicPath: result.topicPath,
-        action: result.action,
-        linksCreated: result.linksCreated,
-        contradictions: result.contradictions,
+        status: 'classifying',
       },
     });
   } catch (error) {
