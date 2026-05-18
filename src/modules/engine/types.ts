@@ -1,4 +1,4 @@
-import type { RawCaptureInput } from '@/modules/storage/types';
+import type { RawCaptureInput, RawCaptureStatus } from '@/modules/storage/types';
 
 export interface ClassificationResult {
   topicPath: string;
@@ -21,7 +21,13 @@ export interface Classifier {
 
 export interface IngestInput extends RawCaptureInput {}
 
-export interface IngestResult {
+export interface SaveRawResult {
+  rawCaptureId: string;
+  title: string;
+  status: RawCaptureStatus;
+}
+
+export interface ClassifyResult {
   rawCaptureId: string;
   topicPath: string;
   action: string;
@@ -30,7 +36,12 @@ export interface IngestResult {
 }
 
 export interface IngestPipeline {
-  ingest(userId: string, input: IngestInput): Promise<IngestResult>;
+  /** Save the raw capture only. Status starts as 'unclassified'. */
+  saveRaw(userId: string, input: IngestInput): Promise<SaveRawResult>;
+  /** Run AI classification on a previously-saved raw capture. Updates status. */
+  classifyOne(userId: string, rawCaptureId: string): Promise<ClassifyResult>;
+  /** Batch classify: returns per-id success/failure summary. */
+  classifyBatch(userId: string, ids: string[]): Promise<Array<{ id: string; success: boolean; error?: string; topicPath?: string }>>;
 }
 
 export interface Reporter {

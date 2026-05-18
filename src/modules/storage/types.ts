@@ -13,9 +13,26 @@ export interface RawCaptureInput {
   confidence: string;
 }
 
+export type RawCaptureStatus = 'unclassified' | 'classifying' | 'classified' | 'failed';
+
 export interface RawCaptureRecord extends RawCaptureInput {
   id: string;
   capturedAt: Date;
+  status: RawCaptureStatus;
+  classifiedAt: Date | null;
+  classificationError: string | null;
+}
+
+export interface RawCaptureSummary {
+  id: string;
+  title: string;
+  sourcePlatform: string;
+  sourceUrl: string;
+  capturedAt: Date;
+  status: RawCaptureStatus;
+  classifiedAt: Date | null;
+  classificationError: string | null;
+  topicPath: string | null;
 }
 
 export interface SimilarTopic {
@@ -64,6 +81,10 @@ export interface UserUsage {
 
 export interface RawCaptureRepository {
   create(userId: string, input: RawCaptureInput): Promise<RawCaptureRecord>;
+  findById(userId: string, id: string): Promise<RawCaptureRecord | null>;
+  list(userId: string, opts?: { status?: RawCaptureStatus; limit?: number }): Promise<RawCaptureSummary[]>;
+  updateStatus(id: string, status: RawCaptureStatus, fields?: { classificationError?: string | null; classifiedAt?: Date | null }): Promise<void>;
+  delete(userId: string, id: string): Promise<void>;
 }
 
 export interface TopicRepository {

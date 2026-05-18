@@ -170,6 +170,57 @@ export default function SettingsPage() {
           <li>任何兼容 OpenAI API 协议的服务均可使用</li>
         </ul>
       </section>
+
+      <BookmarkletSection />
     </div>
+  );
+}
+
+function BookmarkletSection() {
+  const [origin, setOrigin] = useState('');
+  useEffect(() => { setOrigin(window.location.origin); }, []);
+
+  const bookmarkletCode = origin
+    ? `javascript:(function(){window.open('${origin}/clip?url='+encodeURIComponent(location.href),'_blank','width=480,height=420');})();`
+    : '';
+
+  return (
+    <section className="bg-gray-50 rounded-xl p-5">
+      <h2 className="text-base font-semibold mb-3">浏览器收藏（Bookmarklet）</h2>
+      <p className="text-sm text-gray-600 mb-3">
+        把下面的链接<strong>拖到</strong>浏览器书签栏，以后浏览 B站 / 公众号 / 小红书 页面时点击它，即可一键添加到 KClip 收件箱。
+      </p>
+
+      {origin ? (
+        <div className="flex items-center gap-3 mb-3">
+          <a
+            href={bookmarkletCode}
+            onClick={e => e.preventDefault()}
+            draggable
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium cursor-grab active:cursor-grabbing select-none"
+            title="拖动我到书签栏"
+          >
+            📚 KClip 收藏
+          </a>
+          <span className="text-xs text-gray-500">↑ 拖到书签栏</span>
+        </div>
+      ) : (
+        <div className="text-xs text-gray-400">加载中…</div>
+      )}
+
+      <details className="text-xs text-gray-500">
+        <summary className="cursor-pointer hover:text-gray-700">手动复制代码</summary>
+        <textarea
+          readOnly
+          className="mt-2 w-full p-2 font-mono text-xs bg-white border rounded text-gray-700"
+          rows={3}
+          value={bookmarkletCode}
+        />
+      </details>
+
+      <div className="mt-3 text-xs text-gray-500">
+        <strong>使用方式：</strong>打开支持平台的页面 → 点击书签栏的「📚 KClip 收藏」→ 弹出小窗显示「已添加」 → 3 秒自动关闭。AI 分类在后台进行，回到 KClip 看「收件箱」追踪进度。
+      </div>
+    </section>
   );
 }

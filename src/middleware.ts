@@ -6,6 +6,7 @@ const PUBLIC_PATHS = [
   '/login',
   '/register',
   '/admin/login',
+  '/clip',
   '/manifest.json',
   '/sw.js',
 ];
