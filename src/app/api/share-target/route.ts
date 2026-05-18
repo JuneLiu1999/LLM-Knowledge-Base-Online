@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adapterRegistry } from '@/modules/adapters';
 import { ingestPipeline } from '@/modules/engine';
+import { getCurrentUser } from '@/modules/auth-user/request';
 
 export async function POST(request: NextRequest) {
+  const user = await getCurrentUser(request);
+  if (!user) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
   const formData = await request.formData();
   const url = formData.get('url')?.toString() ||
     formData.get('text')?.toString() || '';
@@ -18,7 +24,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const content = await adapterRegistry.fetch(targetUrl);
-    await ingestPipeline.ingest(content);
+    await ingestPipeline.ingest(user.id, content);
 
     return NextResponse.redirect(
       new URL(`/?success=true&title=${encodeURIComponent(content.title)}`, request.url)

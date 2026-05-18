@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { ConditionalShell } from '@/app/_components/ConditionalShell';
 
 export const metadata: Metadata = {
   title: 'Knowledge Clipper',
@@ -36,22 +37,7 @@ export default function RootLayout({
         `}} />
       </head>
       <body className="min-h-screen bg-white">
-        <nav className="sticky top-0 z-50 bg-white border-b border-gray-200 px-4 py-3">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <a href="/" className="text-lg font-bold text-blue-600">
-              📚 KClip
-            </a>
-            <div className="flex gap-4 text-sm">
-              <a href="/" className="text-gray-600 hover:text-blue-600">首页</a>
-              <a href="/wiki" className="text-gray-600 hover:text-blue-600">知识库</a>
-              <a href="/reports" className="text-gray-600 hover:text-blue-600">日报</a>
-              <a href="/settings" className="text-gray-600 hover:text-blue-600">设置</a>
-            </div>
-          </div>
-        </nav>
-        <main className="max-w-4xl mx-auto px-4 py-6">
-          {children}
-        </main>
+        <ConditionalShell>{children}</ConditionalShell>
       </body>
     </html>
   );

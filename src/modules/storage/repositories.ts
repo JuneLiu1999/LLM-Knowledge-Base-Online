@@ -14,14 +14,17 @@ import type {
   DailyReportRepository,
   SimilarTopic,
   MediaUrl,
+  UserUsage,
+  UserUsageRepository,
 } from './types';
 
 export class PrismaRawCaptureRepository implements RawCaptureRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async create(input: RawCaptureInput): Promise<RawCaptureRecord> {
+  async create(userId: string, input: RawCaptureInput): Promise<RawCaptureRecord> {
     const row = await this.prisma.rawCapture.create({
       data: {
+        userId,
         sourcePlatform: input.sourcePlatform,
         sourceUrl: input.sourceUrl,
         title: input.title,
@@ -48,15 +51,15 @@ export class PrismaRawCaptureRepository implements RawCaptureRepository {
 export class PrismaTopicRepository implements TopicRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async findByPath(path: string): Promise<TopicRecord | null> {
-    const row = await this.prisma.wikiTopic.findUnique({ where: { topicPath: path } });
+  async findByPath(userId: string, path: string): Promise<TopicRecord | null> {
+    const row = await this.prisma.wikiTopic.findUnique({ where: { userId_topicPath: { userId, topicPath: path } } });
     if (!row) return null;
     return { id: row.id, topicPath: row.topicPath, contentMd: row.contentMd, updatedAt: row.updatedAt };
   }
 
-  async findByPathWithRelations(path: string): Promise<TopicWithRelations | null> {
+  async findByPathWithRelations(userId: string, path: string): Promise<TopicWithRelations | null> {
     const topic = await this.prisma.wikiTopic.findUnique({
-      where: { topicPath: path },
+      where: { userId_topicPath: { userId, topicPath: path } },
       include: {
         linksFrom: { include: { toTopic: { select: { topicPath: true } } } },
         linksTo: { include: { fromTopic: { select: { topicPath: true } } } },
@@ -92,15 +95,16 @@ export class PrismaTopicRepository implements TopicRepository {
     };
   }
 
-  async listAll() {
+  async listAll(userId: string) {
     return this.prisma.wikiTopic.findMany({
+      where: { userId },
       select: { topicPath: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' },
     });
   }
 
-  async create(input: { topicPath: string; contentMd: string }): Promise<TopicRecord> {
-    const row = await this.prisma.wikiTopic.create({ data: input });
+  async create(userId: string, input: { topicPath: string; contentMd: string }): Promise<TopicRecord> {
+    const row = await this.prisma.wikiTopic.create({ data: { userId, ...input } });
     return { id: row.id, topicPath: row.topicPath, contentMd: row.contentMd, updatedAt: row.updatedAt };
   }
 
@@ -109,13 +113,13 @@ export class PrismaTopicRepository implements TopicRepository {
     return { id: row.id, topicPath: row.topicPath, contentMd: row.contentMd, updatedAt: row.updatedAt };
   }
 
-  async findSimilar(embedding: number[], limit = 5): Promise<SimilarTopic[]> {
+  async findSimilar(userId: string, embedding: number[], limit = 5): Promise<SimilarTopic[]> {
     const vectorStr = `[${embedding.join(',')}]`;
     return this.prisma.$queryRaw<SimilarTopic[]>`
       SELECT id, topic_path, content_md,
              embedding <=> ${vectorStr}::vector AS distance
       FROM wiki_topics
-      WHERE embedding IS NOT NULL
+      WHERE user_id = ${userId} AND embedding IS NOT NULL
       ORDER BY embedding <=> ${vectorStr}::vector
       LIMIT ${limit}
     `;
@@ -154,9 +158,12 @@ export class PrismaContributionRepository implements ContributionRepository {
     await this.prisma.contribution.create({ data: { rawCaptureId, wikiTopicId } });
   }
 
-  async findByDateRange(start: Date, end: Date): Promise<ContributionWithRelations[]> {
+  async findByDateRange(userId: string, start: Date, end: Date): Promise<ContributionWithRelations[]> {
     return this.prisma.contribution.findMany({
-      where: { contributedAt: { gte: start, lte: end } },
+      where: {
+        contributedAt: { gte: start, lte: end },
+        rawCapture: { userId },
+      },
       include: {
         rawCapture: { select: { title: true, sourcePlatform: true, author: true } },
         wikiTopic: { select: { topicPath: true } },
@@ -168,23 +175,50 @@ export class PrismaContributionRepository implements ContributionRepository {
 export class PrismaDailyReportRepository implements DailyReportRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async findByDate(date: string): Promise<DailyReportRecord | null> {
-    return this.prisma.dailyReport.findUnique({ where: { date } });
+  async findByDate(userId: string, date: string): Promise<DailyReportRecord | null> {
+    return this.prisma.dailyReport.findUnique({ where: { userId_date: { userId, date } } });
   }
 
-  async listRecent(limit = 30) {
+  async listRecent(userId: string, limit = 30) {
     return this.prisma.dailyReport.findMany({
+      where: { userId },
       select: { id: true, date: true, createdAt: true },
       orderBy: { date: 'desc' },
       take: limit,
     });
   }
 
-  async upsert(date: string, contentMd: string): Promise<DailyReportRecord> {
+  async upsert(userId: string, date: string, contentMd: string): Promise<DailyReportRecord> {
     return this.prisma.dailyReport.upsert({
-      where: { date },
+      where: { userId_date: { userId, date } },
       update: { contentMd },
-      create: { date, contentMd },
+      create: { userId, date, contentMd },
     });
+  }
+}
+
+export class PrismaUserUsageRepository implements UserUsageRepository {
+  constructor(private prisma: PrismaClient) {}
+
+  async addUsage(userId: string, delta: Partial<UserUsage>): Promise<void> {
+    const data: Record<string, { increment: bigint }> = {};
+    if (delta.storageBytes) data.storageBytes = { increment: BigInt(delta.storageBytes) };
+    if (delta.tokensInput) data.tokensInput = { increment: BigInt(delta.tokensInput) };
+    if (delta.tokensOutput) data.tokensOutput = { increment: BigInt(delta.tokensOutput) };
+    if (Object.keys(data).length === 0) return;
+    await this.prisma.user.update({ where: { id: userId }, data });
+  }
+
+  async getUsage(userId: string): Promise<UserUsage> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { storageBytes: true, tokensInput: true, tokensOutput: true },
+    });
+    if (!user) return { storageBytes: 0, tokensInput: 0, tokensOutput: 0 };
+    return {
+      storageBytes: Number(user.storageBytes),
+      tokensInput: Number(user.tokensInput),
+      tokensOutput: Number(user.tokensOutput),
+    };
   }
 }

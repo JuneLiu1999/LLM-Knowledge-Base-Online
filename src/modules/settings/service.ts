@@ -17,31 +17,31 @@ const LLM_KEYS = [
 export class PrismaSettingsService implements SettingsService {
   constructor(private prisma: PrismaClient) {}
 
-  async get(key: string): Promise<string | null> {
-    const setting = await this.prisma.setting.findUnique({ where: { key } });
+  async get(userId: string, key: string): Promise<string | null> {
+    const setting = await this.prisma.setting.findUnique({ where: { userId_key: { userId, key } } });
     if (!setting) return null;
     return setting.encrypted ? decrypt(setting.value) : setting.value;
   }
 
-  async set(key: string, value: string): Promise<void> {
+  async set(userId: string, key: string, value: string): Promise<void> {
     const isSensitive = SENSITIVE_KEYS.has(key);
     const storedValue = isSensitive ? encrypt(value) : value;
     await this.prisma.setting.upsert({
-      where: { key },
+      where: { userId_key: { userId, key } },
       update: { value: storedValue, encrypted: isSensitive },
-      create: { key, value: storedValue, encrypted: isSensitive },
+      create: { userId, key, value: storedValue, encrypted: isSensitive },
     });
   }
 
-  async getMasked(key: string): Promise<string | null> {
-    const setting = await this.prisma.setting.findUnique({ where: { key } });
+  async getMasked(userId: string, key: string): Promise<string | null> {
+    const setting = await this.prisma.setting.findUnique({ where: { userId_key: { userId, key } } });
     if (!setting) return null;
     if (setting.encrypted) return maskKey(decrypt(setting.value));
     return setting.value;
   }
 
-  async getAll(): Promise<Record<string, string | null>> {
-    const settings = await this.prisma.setting.findMany();
+  async getAll(userId: string): Promise<Record<string, string | null>> {
+    const settings = await this.prisma.setting.findMany({ where: { userId } });
     const result: Record<string, string | null> = {};
     for (const s of settings) {
       result[s.key] = s.encrypted ? maskKey(decrypt(s.value)) : s.value;
@@ -49,10 +49,10 @@ export class PrismaSettingsService implements SettingsService {
     return result;
   }
 
-  async getLLMConfig(): Promise<LLMConfig> {
+  async getLLMConfig(userId: string): Promise<LLMConfig> {
     const config: Record<string, string> = {};
     for (const key of LLM_KEYS) {
-      config[key] = (await this.get(key)) || '';
+      config[key] = (await this.get(userId, key)) || '';
     }
     return {
       cheapModelBaseUrl: config.cheap_model_base_url,

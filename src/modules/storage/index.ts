@@ -6,6 +6,7 @@ import {
   PrismaContradictionRepository,
   PrismaContributionRepository,
   PrismaDailyReportRepository,
+  PrismaUserUsageRepository,
 } from './repositories';
 import type { Storage } from './types';
 
@@ -19,4 +20,5 @@ export const storage: Storage = {
   contradiction: new PrismaContradictionRepository(prisma),
   contribution: new PrismaContributionRepository(prisma),
   report: new PrismaDailyReportRepository(prisma),
+  usage: new PrismaUserUsageRepository(prisma),
 };

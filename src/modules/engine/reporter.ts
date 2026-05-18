@@ -5,15 +5,15 @@ import type { Reporter } from './types';
 export class DefaultReporter implements Reporter {
   constructor(
     private storage: Storage,
-    private chat: ChatClient,
+    private chatFactory: (userId: string) => ChatClient,
   ) {}
 
-  async generateDailyReport(date?: string): Promise<string> {
+  async generateDailyReport(userId: string, date?: string): Promise<string> {
     const targetDate = date || new Date().toISOString().split('T')[0];
     const startOfDay = new Date(targetDate + 'T00:00:00Z');
     const endOfDay = new Date(targetDate + 'T23:59:59Z');
 
-    const contributions = await this.storage.contribution.findByDateRange(startOfDay, endOfDay);
+    const contributions = await this.storage.contribution.findByDateRange(userId, startOfDay, endOfDay);
 
     if (contributions.length === 0) {
       return `# 日报 ${targetDate}\n\n今日无新增内容。`;
@@ -45,13 +45,14 @@ ${topicsAffected.join('\n')}
 
 保持简洁，突出重点。输出纯 Markdown。`;
 
-    const content = await this.chat.complete({
+    const chat = this.chatFactory(userId);
+    const content = await chat.complete({
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.5,
     });
 
     const fullReport = `# 日报 ${targetDate}\n\n${content || '日报生成失败'}`;
-    await this.storage.report.upsert(targetDate, fullReport);
+    await this.storage.report.upsert(userId, targetDate, fullReport);
     return fullReport;
   }
 }
